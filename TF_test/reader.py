@@ -66,11 +66,12 @@ def ptb_raw_data(data_path=None):
 
 def ptb_producer(raw_data, batch_size, num_steps, name=None):
     """
+    返回数据和对应的标签
     This chunks up raw_data into batches of examples and returns Tensors that
     are drawn from these batches.
     :param raw_data: one of the raw data from ptb_raw_data.[w1.w2,w3,,,,]
-    :param batch_size: 要讲数据分为多少批
-    :param num_steps: the number of unrolls
+    :param batch_size: 要将数据分为多少批
+    :param num_steps: the number of unrolls,就是num_steps个单词组成一句话
     :param name:the name of this operation (optional).
     :return:
 
@@ -80,7 +81,8 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
     with tf.name_scope(name, "PTBProducer", [raw_data, batch_size, num_steps]):
         raw_data = tf.convert_to_tensor(raw_data, name='raw_data', dtype=tf.int32)
         data_len = tf.size(raw_data)
-        batch_len = data_len // batch_size  # 一共data_len， 整除批次数量，一批多少个
+        batch_len = data_len // batch_size  # 每批有多少个
+        # 上面用的是整除‘//’，所以会多对几个word，然后raw_data[0:batch_size * batch_len]是去掉这几个
         data = tf.reshape(raw_data[0:batch_size * batch_len], [batch_size, batch_len])
 
         epoch_size = (batch_len - 1) // num_steps
@@ -92,6 +94,7 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
         # 切割,strided_slice(data, start, end), [start, end)，前闭后开
         x = tf.strided_slice(data, [0, i * num_steps], [batch_size, (i + 1) * num_steps])
         x.set_shape([batch_size, num_steps])
+        # 下面构造target，每个当前word的target（‘类别’或者'ground truth'）就是他的下一个word，语言模型！
         y = tf.strided_slice(data, [0, i * num_steps + 1], [batch_size, (i + 1) * num_steps + 1])
         y.set_shape([batch_size, num_steps])
         return x, y
