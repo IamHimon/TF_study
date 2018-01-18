@@ -3,21 +3,23 @@ from __future__ import division
 from __future__ import print_function
 import time
 import numpy as np
-import tensorflow as tf
 import tensorflow.contrib.cudnn_rnn as cudnn_rnn
-import tensorflow.contrib.rnn as rnn
 import tensorflow.contrib.seq2seq as seq2seq
 import TF_test.reader as reader
 
 from tensorflow.python.client import device_lib
 
-from TF_test.util import *
+from util import *
+import sys
+# get current working directory -- Better to set the PYTHONPATH env variable
+current_working_directory = "D:\\Users\humeng\PycharmProjects\TF_study\TF_test\\"
+sys.path.append(current_working_directory)
 
 flags = tf.flags
 logging = tf.logging
 
 flags.DEFINE_string('model', 'small', 'A type of model. Possible options are: small, medium, large.')
-flags.DEFINE_string('data_path', None, 'Where the training/test data is stored.')
+flags.DEFINE_string('data_path', 'E:\\NLP\simple-examples\data', 'Where the training/test data is stored.')
 flags.DEFINE_string('save_path', None, 'Model output directory.')
 flags.DEFINE_bool('use_fp16', False, 'Train using 16-bit floats instead of 32bit floats')
 flags.DEFINE_integer("num_gpus", 1,
@@ -401,25 +403,27 @@ def get_config():
         config = TestConfig
     else:
         raise ValueError("Invalid model: %s", FLAGS.model)
-    if FLAGS.rnn_model:
-        config.rnn_mode = FLAGS.rnn_mode
-    if FLAGS.num_gpus != 1 or tf.__version__ < "1.3.0":
-        config.rnn_mode = BASIC
+    # tf:1.3.0
+    # if FLAGS.rnn_model:
+    #     config.rnn_mode = FLAGS.rnn_mode
+    # if FLAGS.num_gpus != 1 or tf.__version__ < "1.3.0":
+    #     config.rnn_mode = BASIC
     return config
 
 
 def main(_):
     if not FLAGS.data_path:
         raise ValueError("Must set --data_path to PTB data directory")
-    gpus = [
-        x.name for x in device_lib.list_local_devices() if x.device_typy == "GPU"
-    ]
-
-    if FLAGS.num_gpus > len(gpus):
-        raise ValueError(
-            "Your machine has only %d gpus "
-            "which is less than the requested --num_gpus=%d."
-            % (len(gpus), FLAGS.num_gpus))
+    # tf:1.3.0
+    # gpus = [
+    #     x.name for x in device_lib.list_local_devices() if x.device_typy == "GPU"
+    # ]
+    #
+    # if FLAGS.num_gpus > len(gpus):
+    #     raise ValueError(
+    #         "Your machine has only %d gpus "
+    #         "which is less than the requested --num_gpus=%d."
+    #         % (len(gpus), FLAGS.num_gpus))
 
     raw_data = reader.ptb_raw_data(FLAGS.data_path)
     train_data, valid_data, test_data, _ = raw_data
@@ -479,7 +483,7 @@ def main(_):
                 m.assign_lr(session, config.learning_rate * lr_decay)
 
                 print("Epoch: %d Learning rate: %.3f " % (i + 1, session.run(m.lr)))
-                train_perplexity = run_epoch(session, m, eval_op=m.train_op, verbose=True)
+                train_perplexity = run_epoch(session, m, eval_op=m.train_op, verbose=True)  # 训练模型
                 print("Epoch: %d Train Perplexity: %.3f" % (i + 1, train_perplexity))
                 valid_perplexity = run_epoch(session, mvalid)
                 print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
@@ -497,6 +501,16 @@ if __name__ == '__main__':
 
 
 
+'''
+@ 关于  tf.get_variable_scope().reuse_variables() 的解释：
+这个重要的variable_scope函数的目的其实是允许我们在保留模型权重的情况下运行多个模型。首先，从RNN的根源上说，
+因为输入输出有着时间关系，我们的模型在训练时每此迭代都要运用到之前迭代的结果，所以如果我们直接使用
+(cell_output, state) = cell(inputs[:, time_step, :], state)我们可能会得到一堆新的RNN模型，
+而不是我们所期待的前一时刻的RNN模型。再看main函数，当我们训练时，我们需要的是新的模型，所以我们在定义了
+一个scope名为model的模型时说明了我们不需要使用以存在的参数，因为我们本来的目的就是去训练的。而在我们做
+validation和test的时候呢？训练新的模型将会非常不妥，所以我们需要运用之前训练好的模型的参数来测试他们的效果，
+故定义reuse=True。
+'''
 
 
 
